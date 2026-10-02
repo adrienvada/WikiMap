@@ -49,7 +49,7 @@ sont affichés à la volée. Ce que WikiMap apporte en propre :
 | 1 | **Le temps est une donnée de premier rang.** Tout objet porte un intervalle de validité saisi en EDTF (avec son incertitude), converti en bornes numériques (années décimales, calendrier grégorien proleptique). | Rendu fluide, dates incertaines, calendriers multiples. |
 | 2 | **Territoires = fragments atomiques intemporels + affectations datées** (« qui contrôle ce morceau de terre, de quand à quand, selon quelle source »), plutôt que des polygones redessinés à chaque date. | Pas de trous ni de chevauchements, édition locale, conquêtes animables, « histoire d'un lieu » immédiate. |
 | 3 | **Lecteur 100 % statique** : tuiles vectorielles PMTiles découpées par période et servies par un CDN. Aucun serveur applicatif tant que l'éditeur n'existe pas. | Coût proche de zéro, tient la charge, projet facile à forker. |
-| 4 | **Moteur : MapLibre GL JS en projection globe**, avec filtrage temporel sur GPU et fondus. Le choix définitif se fera sur un prototype mesuré. | Libre, tuiles vectorielles, étiquettes de qualité, globe natif. |
+| 4 | **Moteur : MapLibre GL JS 6 en projection globe.** Le changement de date ne déclenche un recalcul qu'au franchissement d'une date de changement (index précalculé), avec un fondu en double tampon ; deck.gl vient en appoint pour les couches denses. À valider sur un prototype mesuré. | Libre, tuiles vectorielles, étiquettes de qualité, globe natif. |
 | 5 | **Licences fixées avant la première contribution externe.** | Elles ne peuvent plus changer ensuite sans l'accord de tous les contributeurs. |
 | 6 | **Données « as code » avant l'éditeur** : base canonique en fichiers texte validés dans Git, contributions par pull request. Migration vers PostgreSQL/PostGIS quand l'éditeur en ligne arrive. | Historique, relecture et attribution dès le premier jour, sans infrastructure. |
 
@@ -129,6 +129,7 @@ sont affichés à la volée. Ce que WikiMap apporte en propre :
 |--------|--------------|---------------------|
 | **OpenHistoricalMap** (OHM) | « OpenStreetMap du passé » : base collaborative de géométries datées (`start_date`, `end_date`), données CC0, carte 2D avec curseur temporel. | Le plus proche par l'esprit, avec une infrastructure d'édition éprouvée. À traiter comme source et partenaire plutôt que comme concurrent. |
 | **Chronas** | Atlas mondial (≈ 2000 av. J.-C. – 2000) découpé en provinces auxquelles on affecte, année par année, souverain, culture et religion ; fiches Wikipédia ; édition ouverte. | Montre que le modèle « provinces + affectations » est simple à éditer. Sa limite : des provinces figées. Le modèle de fragments en est la généralisation. |
+| **ChronoAtlas** (2026) | Carte web (MapLibre 6) des frontières de -3400 à aujourd'hui, construite sur OHM, Cliopatria et CShapes ; code MIT, données propres en CC0, contributions sourcées. | Très proche de notre phase 1, et valide l'approche (index des changements, tuiles par époque). À contacter avant de coder. |
 | **Cliopatria** (Seshat) | Frontières d'environ 1 600 entités politiques, de -3400 à 2024 (publié en 2025). | Meilleure base de départ mondiale pour la phase 1. |
 | **historical-basemaps** | Cartes du monde en GeoJSON à une cinquantaine de dates. | Utile pour comparer, mais la licence (GPL) convient mal à une base de données. |
 | **CShapes 2.0** | Frontières des États souverains de 1886 à 2019. | Référence pour l'époque contemporaine. |
@@ -143,6 +144,12 @@ sont affichés à la volée. Ce que WikiMap apporte en propre :
 | A. Visionneuse seule | Afficher OHM et Wikidata, sans base propre | Rapide, rien à maintenir côté données | Couverture inégale, aucun contrôle sur le modèle (fragments, importance, hiérarchies) |
 | B. Plateforme indépendante | Tout refaire, base comprise | Contrôle total | Effort énorme, doublon de Wikidata et d'OHM, communauté à bâtir de zéro |
 | **C. Hybride (recommandé)** | Visionneuse + base propre limitée à ce que les autres ne font pas (territoires datés en fragments, données d'affichage, liens), fédérée avec Wikidata (QID) et OHM | Valeur propre claire, pas de doublon, échanges possibles | Exige de la rigueur sur les identifiants et les licences |
+
+**Avant d'écrire du code**, prendre contact avec ChronoAtlas et OpenHistoricalMap. Là où leurs
+objectifs recoupent les nôtres (frontières en 2D, imports de données, outils de pipeline), mieux
+vaut contribuer ou mutualiser que dupliquer. WikiMap se distingue par le globe, les couches de
+connaissances (événements, personnages, peuples), le modèle de fragments et l'éditeur
+collaboratif.
 
 ---
 
@@ -192,7 +199,9 @@ ISO 8601-2) :
 **Bornes numériques calculées** pour l'indexation et le rendu : `debut_min`, `debut_max`,
 `fin_min`, `fin_max`, en **années décimales astronomiques** (float64, calendrier **grégorien
 proleptique**), plus une valeur nominale utilisée pour l'affichage. L'écart entre bornes mesure
-l'incertitude, que le rendu peut montrer.
+l'incertitude, que le rendu peut montrer. On reprend la convention d'OpenHistoricalMap
+(`start_decdate`, `end_decdate` : une année entière correspond au 1er janvier, `0.0` à l'an 1
+av. J.-C.). Les données et l'extension MapLibre d'OHM restent ainsi directement compatibles.
 
 Règles :
 
@@ -290,9 +299,10 @@ montée en charge gratuite, et n'importe qui peut héberger un miroir ou un fork
 
 | Domaine | Choix proposé | Alternatives écartées pour l'instant | Raison |
 |---------|---------------|--------------------------------------|--------|
-| Carte et globe | **MapLibre GL JS** (v5 ou plus, projection globe) | CesiumJS (vrai 3D, horloge intégrée, mais cartographie vectorielle et étiquettes plus faibles, plus lourd) ; Mapbox GL JS (non libre) | Libre, tuiles vectorielles, étiquettes, globe natif |
-| Couches animées lourdes | **deck.gl** en surcouche, si le prototype le justifie | Shaders écrits à la main | Filtrage temporel sur GPU, trajets animés |
-| Tuiles | **PMTiles** produits par **tippecanoe** | Serveur de tuiles (Martin, Tegola) | Fichiers statiques, aucun serveur |
+| Carte et globe | **MapLibre GL JS 6.x** (globe depuis la v5 ; v6.11 en octobre 2026) | CesiumJS : très bon modèle temporel et vrai 3D, mais dates av. J.-C. mal gérées nativement, rendu vectoriel encore expérimental, plus lourd. Mapbox GL JS : non libre | Libre, tuiles vectorielles, étiquettes de qualité, globe natif |
+| Couches animées denses | **deck.gl 9.4** via `@deck.gl/maplibre`, si le prototype le justifie | Shaders écrits à la main | Filtrage temporel sur GPU, trajets animés (`TripsLayer`) |
+| Tuiles | **PMTiles** (spécification v3) produites par **tippecanoe** | Serveur de tuiles (Martin, Tegola) | Fichiers statiques, aucun serveur |
+| Relief | **Mapterhorn** (tuiles d'altitude *terrarium*), ombrage et teintes hypsométriques de MapLibre | AWS Terrain Tiles (licences hétérogènes) | Données ouvertes, fonctionne sur le globe ; attributions à afficher |
 | Client | **TypeScript**, **Vite** | — | Typage partagé avec le schéma |
 | Interface | **Svelte 5** (léger) ou **React** (plus grand vivier de contributeurs), à trancher | — | Le moteur reste indépendant de ce choix |
 | Frise | Composant maison (Canvas) avec **d3-scale** et **d3-zoom** | vis-timeline | Besoins très spécifiques (zoom, densité, halos) |
@@ -300,7 +310,7 @@ montée en charge gratuite, et n'importe qui peut héberger un miroir ou un fork
 | Données canoniques (phases 1 à 3) | Fichiers texte (JSON, GeoJSON) dans Git, validés par **JSON Schema** | Base de données dès le départ | Historique et relecture gratuits |
 | Base de données (phase 4) | **PostgreSQL + PostGIS** | Wikibase (excellent pour les déclarations, faible pour les géométries) | Géométries, contraintes temporelles, maturité |
 | Recherche | Index statique (MiniSearch), puis moteur serveur (plein texte PostgreSQL ou Meilisearch) | — | Statique d'abord |
-| Hébergement | Stockage objet + CDN (Cloudflare R2/Pages ou tout équivalent compatible S3) | Serveur dédié | Coût, simplicité |
+| Hébergement | Stockage objet acceptant les requêtes HTTP *range* + CDN (Cloudflare R2 sans frais de sortie, ou tout équivalent compatible S3 ; GitHub Pages pour les prototypes de moins de 1 Go) | Serveur dédié | Coût, simplicité |
 | Tests | **Vitest**, **Playwright** (captures, images/s), **pytest** | — | Régressions visuelles et de performance |
 
 ---
@@ -411,9 +421,9 @@ geometries:
 
 ### 6.1 Globe et fond de carte
 
-- **MapLibre GL JS** en projection globe, qui passe à une projection plane aux grands zooms.
-- **Fond de carte intemporel** : relief ombré, teintes de végétation, côtes, lacs, fleuves. Aucun
-  élément moderne (routes, villes, frontières actuelles).
+- **MapLibre GL JS** en projection globe, qui passe d'elle-même en Mercator vers le zoom 12.
+- **Fond de carte intemporel** : relief ombré (altitudes Mapterhorn), teintes hypsométriques et de
+  végétation, côtes, lacs, fleuves. Aucun élément moderne (routes, villes, frontières actuelles).
 - **Style typographique d'atlas** : capitales espacées pour les empires, italiques pour les peuples,
   noms de villes d'époque. Thèmes clair et sombre.
 - **Couleurs des entités** stables dans le temps et distinctes de leurs voisines : coloration de
@@ -433,30 +443,60 @@ geometries:
 
 ### 6.3 Filtrer le temps à 60 images par seconde
 
-Principe : les géométries sont envoyées une fois au GPU. Changer de date ne doit modifier qu'un
-paramètre, sans recalculer les tuiles.
+**Le constat.** Dans MapLibre, changer la date dans un filtre (`setFilter`, ou `global-state`
+utilisé dans un filtre) fait redécouper toute la source dans les *workers*. L'opération est
+asynchrone (l'ancien rendu reste affiché pendant le calcul) : acceptable de temps en temps, mais pas
+à chaque image d'un glissement. D'où trois idées complémentaires.
 
-| Technique | Principe | Points d'attention |
-|-----------|----------|--------------------|
-| A. Filtre MapLibre (`setFilter`) | Expression `début ≤ t < fin` réappliquée à chaque changement de date | Recalcule la mise en page des tuiles : sans doute trop lent pendant un glissement, suffisant pour des sauts de date |
-| B. État global MapLibre (`global-state`) | La date devient une variable globale référencée par les expressions de style | Plus simple que A ; le coût réel est à mesurer |
-| C. deck.gl `DataFilterExtension` en surcouche | Filtre exécuté dans le shader : changer la date revient à changer un *uniform* ; `filterSoftRange` donne les fondus | Précision float32 (soustraire une origine), compatibilité avec le globe MapLibre, étiquettes laissées à MapLibre |
-| D. Fragments + `feature-state` | Géométrie intemporelle ; à chaque changement de date, on recolore seulement les fragments dont le titulaire change | Très économe en données ; coûteux si des milliers de fragments changent dans une même image |
+1. **Index des changements.** Une frontière change à des dates précises et rien ne bouge entre
+   deux changements. Pour chaque compartiment chargé, le pipeline fournit la liste triée des dates
+   de changement. Quand la date bouge, on ne refiltre que si l'on franchit l'une d'elles.
+   ChronoAtlas, qui procède ainsi, annonce éviter plus de 99 % des recalculs.
+2. **Double tampon.** Le calque des territoires existe en deux exemplaires, chacun avec sa propre
+   source pour que le recalcul de l'un ne touche pas l'autre. L'exemplaire caché reçoit le nouveau
+   filtre ; quand il est prêt, on bascule par un fondu d'opacité de calque (`fill-layer-opacity`
+   piloté par `global-state`). Cette mise à jour coûte très peu et s'anime depuis MapLibre 6.11.
+   Le fondu ne dépend donc ni de la vitesse de défilement ni du temps de calcul. Si l'utilisateur
+   va plus vite que le calcul, on saute les états intermédiaires : un seul refiltrage à la fois,
+   toujours vers la date la plus récente.
+3. **Le GPU pour les couches denses.** Pour des dizaines de milliers de points (événements,
+   personnages) ou des trajets animés, deck.gl (`DataFilterExtension`, `TripsLayer`) filtre dans
+   le shader : changer la date revient à changer un seul paramètre (*uniform*).
 
-Hypothèse de travail : C pour les couches lourdes (territoires, points), MapLibre pour le fond et
-les étiquettes. Le prototype A de la phase 0 la confirmera ou l'infirmera.
+| Technique | Coût d'un changement de date | Usage prévu |
+|-----------|------------------------------|-------------|
+| Filtre MapLibre (`setFilter`, ou `global-state` dans un filtre) | Élevé : la source est redécoupée | Territoires et étiquettes, uniquement au franchissement d'un changement |
+| Opacité de calque (`fill-layer-opacity` piloté par `global-state`) | Très faible, animable | Fondus du double tampon |
+| `feature-state` | Faible : mise à jour objet par objet sur le fil principal | Coloration directe des fragments, surbrillances |
+| deck.gl `DataFilterExtension` | Quasi nul | Points denses, trajets animés |
+| Opacité calculée par objet selon la date (`["get", …]` dans une propriété de peinture) | Élevé : redécoupage | À éviter |
+
+Précautions :
+
+- Les étiquettes doivent être *filtrées*, pas seulement rendues transparentes : une étiquette
+  invisible occupe toujours sa place dans la détection des collisions.
+- deck.gl avec MapLibre 6 passe par `@deck.gl/maplibre` (`MapLibreOverlay`, deck.gl 9.4) : un seul
+  calque intercalé par carte, et certaines couches (`TextLayer`, icônes non tournées vers la caméra)
+  ne s'affichent pas sur le globe avec les réglages par défaut. Les valeurs sont en float32 : en
+  années décimales, la précision reste de l'ordre de quelques heures, ce qui suffit.
+
+**Hypothèse de travail** : MapLibre seul pour les territoires (index des changements + double
+tampon), deck.gl seulement si les couches de points l'exigent. Le prototype A de la phase 0
+tranchera, mesures à l'appui.
 
 ### 6.4 Transitions
 
-- **Fondu enchaîné** des territoires. La largeur du fondu est proportionnelle au zoom de la frise
-  (environ 0,5 % de la plage visible), pour un rendu cohérent à toutes les échelles de temps.
+- **Fondu enchaîné** à chaque franchissement d'un changement : l'ancien et le nouvel état se
+  fondent en quelques centaines de millisecondes (double tampon du § 6.3), quelle que soit la
+  vitesse de défilement.
 - **« Pulsation » des zones qui changent de mains** : un contour lumineux qui s'estompe, surtout
   utile en lecture automatique. Le modèle de fragments donne exactement ces zones.
-- **Étiquettes en fondu**, positions précalculées (pôle d'inaccessibilité du territoire, puis à terme
-  étiquettes courbes le long de l'axe du territoire, comme dans les atlas imprimés).
+- **Étiquettes** : apparitions et disparitions en fondu (natif dans MapLibre) ; positions
+  précalculées (pôle d'inaccessibilité du territoire, puis à terme étiquettes courbes le long de
+  l'axe du territoire, comme dans les atlas imprimés).
 - **Pas de morphing géométrique généralisé** : coûteux, et trompeur parce qu'il invente des
   frontières intermédiaires. On le réserve aux cas où il a du sens, comme des lignes de front datées
-  (1914–1918, 1939–1945).
+  (1914–1918, 1939–1945) ; deck.gl sait interpoler des tracés sur GPU, à nombre de sommets égal.
 
 ### 6.5 Densité : zoom spatial et zoom temporel
 
@@ -559,6 +599,10 @@ flowchart TB
 6. **Index** : recherche, dates de changement par région (bouton « changement suivant »),
    histogrammes de densité.
 7. **Tuilage** : tippecanoe, puis un fichier PMTiles par couche et par compartiment temporel.
+   Options utiles : `--detect-shared-borders` (les frontières communes restent identiques après
+   simplification) et un zoom minimal par objet, dérivé de l'importance. À proscrire sur des objets
+   datés : les options de fusion (`--coalesce-*`) et d'agrégation, qui mélangent des objets aux
+   intervalles de validité différents.
 8. **Contrôles** : invariants, validité des géométries, captures de référence à des dates clés
    (-500, 800, 1453, 1648, 1815, 1914, 1945, 2000) comparées d'une version à l'autre.
 9. **Publication** : envoi immuable et versionné avec un manifeste (versions des sources, dates des
@@ -607,10 +651,12 @@ WikiMap/
 
 - Valider ce plan, trancher les licences, rédiger les premiers ADR : licences, modèle du temps,
   modèle des territoires, stratégie statique.
+- Prendre contact avec ChronoAtlas et OpenHistoricalMap (§ 3.2).
 - Mettre en place le monorepo, la CI et le déploiement d'aperçus.
-- **Prototype A — rendu temporel** : quelques milliers de polygones datés sur le globe, frise
-  basique ; comparer les techniques de filtrage du § 6.3 sur un même jeu de données ; mesurer images
-  par seconde, temps d'image p95 et mémoire sur un ordinateur moyen et un téléphone moyen.
+- **Prototype A — rendu temporel** : Cliopatria entier sur le globe, frise basique. Comparer sur
+  le même jeu de données l'index des changements avec double tampon, la coloration de fragments
+  par `feature-state` et le filtrage GPU de deck.gl (§ 6.3). Mesurer images par seconde, temps
+  d'image p95, délai d'un refiltrage et mémoire, sur un ordinateur moyen et un téléphone moyen.
 - **Prototype B — fragments** : fragmenter Cliopatria sur l'Europe et la Méditerranée ; mesurer le
   nombre de fragments, la part de micro-fragments, le temps de calcul ; vérifier qu'en refusionnant
   on retrouve les polygones d'origine.
@@ -766,6 +812,7 @@ Notes de conception pour plus tard :
 ## 14. Prochaines étapes
 
 - [ ] Relire ce plan et répondre aux questions ouvertes (dans la pull request).
+- [ ] Contacter ChronoAtlas et OpenHistoricalMap pour identifier ce qui peut être mutualisé.
 - [ ] ADR-001 Licences, ADR-002 Modèle du temps, ADR-003 Territoires, ADR-004 Diffusion statique.
 - [ ] Monorepo, CI et aperçus de déploiement.
 - [ ] Prototype A : rendu temporel, avec mesures.
