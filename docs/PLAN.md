@@ -133,6 +133,7 @@ sont affichés à la volée. Ce que WikiMap apporte en propre :
 | **Cliopatria** (Seshat) | Frontières d'environ 1 600 entités politiques, de -3400 à 2024 (publié en 2025). | Meilleure base de départ mondiale pour la phase 1. |
 | **historical-basemaps** | Cartes du monde en GeoJSON à une cinquantaine de dates. | Utile pour comparer, mais la licence (GPL) convient mal à une base de données. |
 | **CShapes 2.0** | Frontières des États souverains de 1886 à 2019. | Référence pour l'époque contemporaine. |
+| **War Atlas** | Carte d'environ 10 900 conflits ; code MIT, données de licences diverses. | Référence pour la couche événements. |
 | **GeaCron, Running Reality, Euratlas** | Atlas historiques commerciaux. | Références d'expérience utilisateur, pas de données réutilisables. |
 | **Wikidata** | Graphe de connaissances, CC0. | Source principale pour personnes, événements et entités ; identifiants (QID). |
 | **World Historical Gazetteer, Pleiades, PeriodO** | Gazetiers historiques, définitions de périodes. | Lieux anciens, noms d'époque, périodisations régionales. |
@@ -174,8 +175,13 @@ collaboratif.
 
 **Recommandation** : CC0 pour les contributions, ce qui permet d'échanger dans les deux sens avec
 les deux projets les plus proches (Wikidata et OHM), et licence d'origine conservée pour chaque
-enregistrement importé. Une donnée dérivée d'un enregistrement CC BY reste CC BY : la licence suit
-la lignée de l'enregistrement.
+enregistrement importé. ChronoAtlas applique déjà ce modèle. Une donnée dérivée d'un enregistrement
+CC BY reste CC BY : la licence suit la lignée de l'enregistrement. Conséquences concrètes :
+
+- les territoires issus de Cliopatria restent sous CC BY 4.0 (attribution). Pour les verser dans
+  OHM, il faudra l'accord de leurs auteurs, à demander lors de la prise de contact ;
+- les scores de notoriété publiés (Pantheon, base de Laouenan et al.) sont sous CC BY-SA 4.0 : ils
+  servent à étalonner notre propre score, pas de source.
 
 **Pourquoi trancher maintenant** : OpenStreetMap a changé de licence en 2012 (de CC BY-SA vers
 ODbL) et a dû supprimer les contributions des personnes qui n'avaient pas donné leur accord. Pour
@@ -217,8 +223,24 @@ Règles :
 - **Préhistoire** : saisie possible en « BP » (*before present*, avant 1950) avec marge d'erreur,
   convertie dans la même échelle.
 - **Une seule logique** : une bibliothèque `time` en TypeScript (client, futur éditeur) et son
-  équivalent Python (pipeline), testées contre les **mêmes vecteurs de test** (fichiers JSON
-  partagés : année 0, dates av. J.-C., bascule julien/grégorien, précisions Wikidata…).
+  équivalent Python (pipeline), appuyées sur edtf.js et la bibliothèque Python `edtf`, et testées
+  contre les **mêmes vecteurs de test** (fichiers JSON partagés).
+
+**Les pièges de Wikidata**, à couvrir par ces vecteurs de test. Une même date ne se lit pas de la
+même façon selon la voie d'extraction :
+
+| Date | JSON (dumps, API) | RDF / SPARQL |
+|------|-------------------|--------------|
+| Bataille d'Hastings | `+1066-10-14`, calendrier julien | `1066-10-20` : convertie en grégorien, mais toujours étiquetée julienne |
+| Mort de César | `-0044-03-15` : pas d'année 0, -44 = 44 av. J.-C. | `-0043-03-13` : numérotation astronomique, convertie en grégorien |
+
+- Le décalage d'un an des dates av. J.-C. ne vaut que pour une précision à l'année ou plus fine,
+  pas pour les décennies, siècles ou millénaires.
+- La précision (de 6, le millénaire, à 11, le jour) doit toujours être lue : « 1850, précision
+  siècle » signifie « XIXe siècle ».
+- L'incertitude est portée par des qualificatifs (« vers » : P1480 ; « au plus tôt » et « au plus
+  tard » : P1319 et P1326) absents des extractions simplifiées (*truthy*). Il faut donc lire les
+  déclarations complètes.
 
 ### 4.3 Les territoires : fragments et affectations
 
@@ -227,8 +249,10 @@ sont alors dupliquées entre voisins, ce qui produit des trous et des chevauchem
 frontière impose de retoucher deux polygones de façon synchronisée, et rien ne dit *pourquoi* la
 frontière a changé.
 
-**Le modèle proposé** est celui des « géométries communes minimales » (*least common geometry*),
-utilisé en SIG historique :
+**Le modèle proposé** est celui des « géométries communes minimales » (*least common geometry*,
+De Moor et Wiedemann, 2001), qui prolonge le « composite espace-temps » de Langran et Chrisman
+(1988). Il a déjà servi à convertir l'atlas historique des comtés américains de la Newberry Library
+vers PostGIS Topology, puis vers OpenHistoricalMap.
 
 ```text
 Fragments (géométrie fixe)     Affectations datées (couche « souveraineté »)
@@ -261,6 +285,16 @@ Fragments (géométrie fixe)     Affectations datées (couche « souveraineté �
 | Polygones versionnés par entité (comme Cliopatria, CShapes, OHM) | Simple à afficher, format natif des sources | Frontières communes dupliquées, trous et chevauchements, édition lourde, pas de sémantique du changement |
 | Topologie d'arcs datés (style OSM ou TopoJSON) | Précis, sans duplication | Édition et validation complexes : chaque anneau doit rester fermé à chaque instant |
 | **Fragments + affectations** (recommandé) | Partition sans trous ni chevauchements, édition locale au « pinceau temporel », changements animables, histoire d'un lieu immédiate, couches multiples | Import initial à soigner (superposition des sources, nettoyage des micro-fragments) ; finesse limitée par le découpage, mais affinable à volonté |
+
+**Ce que montre l'expérience d'OpenHistoricalMap**, qui suit le modèle des arcs partagés :
+
+- un même segment de frontière y a appartenu à 1 169 relations ;
+- un changement de nom oblige à dupliquer la géométrie ;
+- modifier un segment partagé modifie, par construction, toutes les époques qui l'utilisent ;
+- les tracés à l'échelle d'un pays exigent un éditeur de bureau (JOSM).
+
+Dans le modèle de fragments, un nom est une déclaration datée, une affectation ne concerne que son
+intervalle, et découper un fragment ne change pas le passé.
 
 **Découplage clé** : le client ne consomme que des **tranches territoriales**, c'est-à-dire des
 polygones fusionnés par entité et par période stable (le même format que des polygones versionnés).
@@ -308,7 +342,8 @@ montée en charge gratuite, et n'importe qui peut héberger un miroir ou un fork
 | Frise | Composant maison (Canvas) avec **d3-scale** et **d3-zoom** | vis-timeline | Besoins très spécifiques (zoom, densité, halos) |
 | Pipeline | **Python 3.12+**, **uv**, **DuckDB** (extension spatiale), **Shapely 2** / GeoPandas, **mapshaper** | Tout en SQL PostGIS | Écosystème géospatial le plus riche |
 | Données canoniques (phases 1 à 3) | Fichiers texte (JSON, GeoJSON) dans Git, validés par **JSON Schema** | Base de données dès le départ | Historique et relecture gratuits |
-| Base de données (phase 4) | **PostgreSQL + PostGIS** | Wikibase (excellent pour les déclarations, faible pour les géométries) | Géométries, contraintes temporelles, maturité |
+| Dates | **edtf.js** (JavaScript) et **edtf** (Python) | Code maison | Niveaux 0 à 2 de l'EDTF, bibliothèques maintenues |
+| Base de données (phase 4) | **PostgreSQL 18 + PostGIS** (PostGIS Topology : ses faces sont nos fragments) | Wikibase : bon pour les déclarations, mais géométries réduites à des points ou à des pages GeoJSON non datées, et service de requêtes encore sur Blazegraph, abandonné | Géométries, topologie, contraintes temporelles, maturité |
 | Recherche | Index statique (MiniSearch), puis moteur serveur (plein texte PostgreSQL ou Meilisearch) | — | Statique d'abord |
 | Hébergement | Stockage objet acceptant les requêtes HTTP *range* + CDN (Cloudflare R2 sans frais de sortie, ou tout équivalent compatible S3 ; GitHub Pages pour les prototypes de moins de 1 Go) | Serveur dédié | Coût, simplicité |
 | Tests | **Vitest**, **Playwright** (captures, images/s), **pytest** | — | Régressions visuelles et de performance |
@@ -397,12 +432,32 @@ sources: [S000101]
 # Un événement
 id: E000999
 type: evenement
-qid: Q83224                       # bataille d'Hastings (QID indicatif)
-existence: "1066-10-14"           # calendrier julien d'origine, conservé
-calendrier_origine: julien
+qid: Q83224                       # bataille d'Hastings
+existence: "1066-10-20"           # EDTF, grégorien proleptique
+date_origine: { calendrier: julien, valeur: "1066-10-14" }   # pour l'affichage
 geometries:
   - { role: position, forme: { type: Point, coordinates: [0.4875, 50.9125] } }
 ```
+
+**Correspondance avec Wikidata (extrait)** : chaque propriété du vocabulaire WikiMap a son
+équivalent, ce qui rend l'import direct et, à terme, l'export possible.
+
+| Propriété WikiMap | Wikidata |
+|-------------------|----------|
+| naissance, mort (dates) | P569, P570 |
+| lieu de naissance, de mort | P19, P20 |
+| fonction occupée, avec début et fin | P39 (qualificatifs P580, P582) |
+| date ponctuelle, début, fin | P585, P580, P582 |
+| lieu, coordonnées | P276, P625 |
+| participant, commandant | P710, P4791 |
+| fait partie de, comprend | P361, P527 |
+| cause, conséquence | P828, P1542 |
+| fondation, dissolution | P571, P576 |
+| capitale | P36 |
+| chef d'État, chef de gouvernement | P35, P6 |
+| remplace, remplacé par | P1365, P1366 |
+| frontalier de | P47 |
+| identifiants Pleiades, GeoNames, relation OSM | P1584, P1566, P402 |
 
 **Invariants vérifiés automatiquement** (en CI, puis par l'éditeur, avec le même code) :
 
@@ -500,8 +555,11 @@ tranchera, mesures à l'appui.
 
 ### 6.5 Densité : zoom spatial et zoom temporel
 
-- Chaque entité reçoit un **score d'importance** : liens interlangues Wikipédia, consultations,
-  indices publiés (Pantheon…), ajustement éditorial.
+- Chaque entité reçoit un **score d'importance**, calculé à partir de données libres (nombre
+  d'éditions linguistiques de Wikipédia, via Wikidata ; consultations) et d'un ajustement
+  éditorial. Les indices publiés (Pantheon : 126 000 personnes ; Laouenan et al. : 2,3 millions)
+  servent à l'étalonner. Ce tri est indispensable : Wikidata compte environ 4,1 millions de
+  personnes dont la date et le lieu de naissance géolocalisé sont connus.
 - **Dans l'espace** : le score fixe le zoom minimal d'affichage et la priorité des étiquettes.
 - **Dans le temps** : une bataille d'un jour serait invisible quand on parcourt les siècles. Chaque
   événement ponctuel reçoit donc un **halo temporel** proportionnel à la plage de temps visible, et
@@ -528,8 +586,12 @@ tranchera, mesures à l'appui.
 
 ### 6.7 Fiches, recherche, histoire d'un lieu
 
-- **Fiche** : données WikiMap, plus le résumé Wikipédia dans la langue de l'utilisateur (avec
-  repli), attribué et lié ; images de Wikimedia Commons avec auteur et licence.
+- **Fiche** : données WikiMap, plus le résumé Wikipédia dans la langue de l'utilisateur, avec
+  repli (point d'accès `page/summary`, en-tête `Api-User-Agent` qui identifie l'application). Le
+  texte est sous CC BY-SA 4.0 : lien vers l'article, mention de la licence et des éventuelles
+  modifications. Les images viennent uniquement de Wikimedia Commons, avec auteur et licence lus
+  dans leurs métadonnées. Le résumé peut renvoyer des images non libres hébergées sur la Wikipédia
+  anglophone (affiches, logos) : elles sont écartées.
 - **Recherche** : index statique chargé à la demande (MiniSearch ou équivalent), remplacé plus tard
   par un moteur côté serveur.
 - **Histoire d'un lieu** : point cliqué → fragment → historique de ses affectations, plus les
@@ -587,13 +649,18 @@ flowchart TB
 ```
 
 1. **Ingestion** : un connecteur par source. Chaque instantané brut est conservé avec sa date et sa
-   licence.
-2. **Normalisation** vers le schéma canonique : dates EDTF, noms multilingues, provenance.
+   licence. Pour Wikidata, les builds reproductibles partent des dumps JSON hebdomadaires (environ
+   156 Go compressés), et QLever sert à l'exploration. On évite de dépendre du service de requêtes
+   officiel, en pleine migration de Blazegraph vers QLever : accès public prévu le 1er novembre
+   2026, arrêt de Blazegraph visé au 30 juin 2027, requêtes à réécrire.
+2. **Normalisation** vers le schéma canonique : dates EDTF (avec les corrections du § 4.2 pour
+   Wikidata), noms multilingues, provenance.
 3. **Réconciliation** avec Wikidata (QID) : appariement automatique sur nom, dates et lieu, puis file
    de vérification manuelle pour les cas douteux.
 4. **Fragmentation** (phase 3) : superposition de tous les polygones territoriaux, accrochage,
    suppression des micro-fragments sous un seuil de surface, création des affectations. Les
-   chevauchements et les trous sont listés dans un rapport à examiner.
+   chevauchements et les trous sont listés dans un rapport à examiner. Outils : `ST_CoverageClean`
+   (PostGIS 3.6 ou plus), `mapshaper -clean` et `-filter-slivers`.
 5. **Construction** : fusion par entité et par période stable (pour chaque niveau de hiérarchie),
    points d'étiquette, lignes de frontière, couleurs.
 6. **Index** : recherche, dates de changement par région (bouton « changement suivant »),
@@ -661,7 +728,10 @@ WikiMap/
   nombre de fragments, la part de micro-fragments, le temps de calcul ; vérifier qu'en refusionnant
   on retrouve les polygones d'origine.
 - **Prototype C — Wikidata** : extraire batailles, guerres, dirigeants et personnages (dates, lieux,
-  coordonnées) ; mesurer volumes et qualité, calculer un premier score d'importance.
+  coordonnées) ; mesurer la qualité, calculer un premier score d'importance. Ordres de grandeur
+  relevés en octobre 2026 : environ 13 700 batailles datées et localisables ; 4,1 millions de
+  personnes avec date et lieu de naissance géolocalisé, dont environ 290 000 nées avant 1800.
+  Croiser les batailles avec HCED (8 874 batailles de -1468 à 2003, CC0).
 
 *Sortie* : ADR rédigés ; techniques de rendu et modèle de territoires validés par des mesures.
 
@@ -701,7 +771,8 @@ décolonisation de l'Afrique…
 3. Dépôt de données avec validation en CI (schéma, invariants, géométries) et aperçu sur le globe
    de chaque PR de données.
 4. Outils de contribution : une CLI (`wikimap affecter --fragments … --entite … --validite …`), un
-   projet QGIS type, des guides.
+   projet QGIS type, des guides. Le greffon QGIS « Time Editor » (HIL, Marburg) vérifie déjà la
+   cohérence spatiale et temporelle de ce type de données : à évaluer.
 5. Politique éditoriale v0 : vérifiabilité, neutralité, territoires contestés, conventions de
    nommage.
 6. Publications versionnées des données (exports GeoJSON/GeoParquet/CSV, DOI via Zenodo).
@@ -720,8 +791,14 @@ Hors périmètre immédiat, mais préparé dès maintenant (voir § 10).
 - Outils cartographiques : sélection de fragments et **« pinceau temporel »** (affecter une zone à
   une entité sur un intervalle), découpe d'un fragment par un trait avec accrochage, tracé
   d'événements et de trajets, aperçu avant/après, source obligatoire.
-- Modération : niveaux de confiance, modifications en attente de relecture sur les entités
-  sensibles ou très vues, file de patrouille, protections, filtres anti-abus.
+- Modération, sur le modèle de Wikipédia et d'OSM :
+  - le **groupe de modifications** (*changeset*), avec commentaire et sources, comme unité de
+    relecture ;
+  - des signalements par règles (suppressions massives, mots suspects) et un score de risque
+    calculé, à la manière des modèles de risque de révocation de Wikimedia ou d'OSMCha pour OSM ;
+  - des limites de débit pour les nouveaux comptes, et l'annulation en un clic ;
+  - une relecture *avant* publication réservée aux entités protégées ou contestées. Généralisée,
+    elle crée des arriérés : 15 jours en moyenne sur la Wikipédia germanophone en 2016.
 - Publication incrémentale : une modification déclenche la reconstruction des seules tuiles et
   périodes touchées.
 
@@ -752,12 +829,17 @@ refaire :
 
 Notes de conception pour plus tard :
 
-- **Modèle wiki plutôt que temps réel** : révisions avec contrôle de concurrence optimiste (« vous
-  modifiez la révision 42, qui a changé entre-temps »), sans CRDT au début. Deux personnes éditent
-  rarement le même fragment à la même seconde ; elles ont surtout besoin d'historique et de
-  discussion.
-- **Contraintes temporelles en base** : contraintes d'exclusion PostgreSQL (`btree_gist`) pour
-  interdire deux affectations qui se chevauchent dans le temps.
+- **Modèle wiki plutôt que temps réel** : révisions avec contrôle de concurrence optimiste. Une
+  modification indique la révision dont elle part. Si d'autres enregistrements ont changé
+  entre-temps, la fusion est automatique ; seul un conflit sur le même enregistrement est soumis à
+  l'utilisateur, comme dans Wikibase. Pas de CRDT (Yjs) au début : un CRDT garantit que les copies
+  convergent, pas que la topologie reste valide, et il complique l'historique, l'attribution et la
+  relecture. Il pourra servir plus tard aux brouillons partagés, validés ensuite en un seul groupe
+  de modifications.
+- **Le temps en base** : ne pas utiliser le type `date` de PostgreSQL. Il n'a pas d'année 0 (44
+  av. J.-C. y vaut -44, contre -43 en numérotation astronomique) et s'arrête en 4713 av. J.-C. On
+  stocke les bornes en `numrange` (années décimales) et on interdit les chevauchements avec les
+  clés `WITHOUT OVERLAPS` de PostgreSQL 18, ou avec des contraintes d'exclusion (`btree_gist`).
 - **Aperçu instantané** : la modification en cours est rendue côté client en surimpression, pendant
   que le pipeline reconstruit les tuiles.
 - **Échanges avec Wikidata et OpenHistoricalMap** : suggestions de QID, et export des sous-ensembles
@@ -774,7 +856,7 @@ Notes de conception pour plus tard :
 | Contamination de licence | Licence et provenance par enregistrement, contrôle automatique dans le pipeline, aucun import sans licence claire |
 | Performance quand les données s'accumulent | Compartiments temporels, niveaux de détail, mesures en CI |
 | Dérive du périmètre | Phases avec critères de sortie ; la phase 1 se limite aux frontières politiques |
-| Dépendance aux services externes (API Wikipédia, points d'accès Wikidata) | Instantanés datés, caches, dégradation gracieuse |
+| Dépendance aux services Wikimedia, qui évoluent : migration du service de requêtes Wikidata (2026–2027), retrait progressif de l'infrastructure RESTBase, nouvelles limites de débit en 2026 | Dumps et instantanés datés plutôt que requêtes en direct, couche d'accès isolée et remplaçable, caches, dégradation gracieuse |
 | Épuisement d'un projet porté par une seule personne | Architecture simple, documentation, petites livraisons, communauté associée tôt |
 | Personnes vivantes et RGPD | Couche personnages limitée aux personnalités publiques et aux personnes décédées ; règles inspirées des « biographies de personnes vivantes » de Wikipédia |
 | Lois encadrant la représentation des frontières dans certains pays | Statut contesté explicite, nommage neutre, avis juridique avant tout partenariat local |
@@ -824,7 +906,8 @@ Notes de conception pour plus tard :
 
 ## Annexe A — Sources de données candidates
 
-Licences marquées « à confirmer » : à vérifier avant tout import.
+État relevé en octobre 2026. Les licences marquées « à confirmer » doivent être vérifiées avant tout
+import.
 
 | Source | Contenu | Licence | Usage prévu |
 |--------|---------|---------|-------------|
@@ -832,14 +915,21 @@ Licences marquées « à confirmer » : à vérifier avant tout import.
 | Wikipédia | Résumés d'articles | CC BY-SA 4.0 | Affichage à la volée |
 | Wikimedia Commons | Images | Licence propre à chaque fichier | Affichage à la volée |
 | Natural Earth | Côtes, fleuves, lacs, relief | Domaine public | Fond de carte |
-| Cliopatria | Frontières de -3400 à 2024 | À confirmer | Territoires, phase 1 |
+| Mapterhorn | Altitudes (tuiles *terrarium*) | Sources multiples, surtout CC BY 4.0 ; liste d'attributions à afficher | Relief |
+| Cliopatria | Frontières de -3400 à 2024 ; QID Wikidata et identifiant Seshat sur chaque ligne | CC BY 4.0 | Territoires, phase 1 |
+| Seshat | Variables par entité politique : capitales, langues, religions, successions, complexité sociale | CC BY-SA 4.0 (compte gratuit requis) | Compléments, licence isolée |
 | OpenHistoricalMap | Géométries datées | CC0 | Compléments, échanges |
-| CShapes 2.0 | États souverains 1886–2019 | À confirmer | Époque contemporaine |
-| historical-basemaps | Cartes du monde à une cinquantaine de dates | GPL (à confirmer) | Comparaison seulement |
+| CShapes 2.0 | États souverains 1886–2019 | Usage non commercial | Exclu de la base (non libre) ; comparaison |
+| historical-basemaps | Cartes du monde à une cinquantaine de dates | GPL-3.0 | Comparaison seulement |
+| HCED | 8 874 batailles de -1468 à 2003 : coordonnées, belligérants, vainqueur | CC0 | Événements |
+| UCDP | Conflits 1946–2025 ; événements géolocalisés 1989–2025 | CC BY 4.0 | Événements contemporains |
+| Correlates of War | Guerres 1816–2007 | Redistribution interdite | Exclu |
+| Pantheon | 126 582 personnalités, indice de popularité historique | CC BY-SA 4.0 | Étalonnage du score d'importance |
+| Laouenan et al. (2022) | 2,29 millions de personnalités vérifiées | CC BY-SA 4.0 | Étalonnage du score d'importance |
 | PeriodO | Définitions de périodes | CC0 | Bandes de la frise |
 | Pleiades | Lieux antiques | CC BY (à confirmer) | Villes et sites antiques |
 | World Historical Gazetteer | Lieux historiques | À confirmer | Noms d'époque |
-| Pantheon | Personnalités, indice de popularité historique | À confirmer | Score d'importance |
+| Contours Wikidata (P3896) | Pages GeoJSON sur Commons | Licence propre à chaque page | Inutilisable pour des frontières datées : instantanés sans date, 18 des 5 015 « pays historiques » seulement |
 
 ## Annexe B — Glossaire
 
