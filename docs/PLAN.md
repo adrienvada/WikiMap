@@ -46,7 +46,7 @@ sont affichés à la volée. Ce que WikiMap apporte en propre :
 
 | # | Décision | Pourquoi |
 |---|----------|----------|
-| 1 | **Le temps est une donnée de premier rang.** Tout objet porte un intervalle de validité saisi en EDTF (avec son incertitude), converti en bornes numériques (années décimales, calendrier grégorien proleptique). | Rendu fluide, dates incertaines, calendriers multiples. |
+| 1 | **Le temps est une donnée de premier rang.** Tout objet porte un intervalle de validité `[début, fin[` dont les bornes sont saisies en EDTF, avec leur incertitude, puis converties en années décimales (calendrier grégorien proleptique). | Rendu fluide, dates incertaines, calendriers multiples. |
 | 2 | **Territoires = fragments atomiques intemporels + affectations datées** (« qui contrôle ce morceau de terre, de quand à quand, selon quelle source »), plutôt que des polygones redessinés à chaque date. | Pas de trous ni de chevauchements, édition locale, conquêtes animables, « histoire d'un lieu » immédiate. |
 | 3 | **Lecteur 100 % statique** : tuiles vectorielles PMTiles découpées par période et servies par un CDN. Aucun serveur applicatif tant que l'éditeur n'existe pas. | Coût proche de zéro, tient la charge, projet facile à forker. |
 | 4 | **Moteur : MapLibre GL JS 6 en projection globe.** Le changement de date ne déclenche un recalcul qu'au franchissement d'une date de changement (index précalculé), avec un fondu en double tampon ; deck.gl vient en appoint pour les couches denses. À valider sur un prototype mesuré. | Libre, tuiles vectorielles, étiquettes de qualité, globe natif. |
@@ -127,16 +127,21 @@ sont affichés à la volée. Ce que WikiMap apporte en propre :
 
 | Projet | Ce que c'est | Ce qu'on en retient |
 |--------|--------------|---------------------|
-| **OpenHistoricalMap** (OHM) | « OpenStreetMap du passé » : base collaborative de géométries datées (`start_date`, `end_date`), données CC0, carte 2D avec curseur temporel. | Le plus proche par l'esprit, avec une infrastructure d'édition éprouvée. À traiter comme source et partenaire plutôt que comme concurrent. |
-| **Chronas** | Atlas mondial (≈ 2000 av. J.-C. – 2000) découpé en provinces auxquelles on affecte, année par année, souverain, culture et religion ; fiches Wikipédia ; édition ouverte. | Montre que le modèle « provinces + affectations » est simple à éditer. Sa limite : des provinces figées. Le modèle de fragments en est la généralisation. |
-| **ChronoAtlas** (2026) | Carte web (MapLibre 6) des frontières de -3400 à aujourd'hui, construite sur OHM, Cliopatria et CShapes ; code MIT, données propres en CC0, contributions sourcées. | Très proche de notre phase 1, et valide l'approche (index des changements, tuiles par époque). À contacter avant de coder. |
-| **Cliopatria** (Seshat) | Frontières d'environ 1 600 entités politiques, de -3400 à 2024 (publié en 2025). | Meilleure base de départ mondiale pour la phase 1. |
-| **historical-basemaps** | Cartes du monde en GeoJSON à une cinquantaine de dates. | Utile pour comparer, mais la licence (GPL) convient mal à une base de données. |
-| **CShapes 2.0** | Frontières des États souverains de 1886 à 2019. | Référence pour l'époque contemporaine. |
+| **OpenHistoricalMap** (OHM) | « OpenStreetMap du passé » : base collaborative de géométries datées (`start_date`, `end_date`, `start_date:edtf`), données CC0, carte 2D avec curseur temporel, export quotidien. Environ 4 100 frontières de rang national, mais une couverture clairsemée avant 1500 : une soixantaine d'entités valides en l'an 1000, contre près de 180 en 1800. | Le plus proche par l'esprit, avec une infrastructure d'édition éprouvée. Source fiable pour l'époque moderne ; partenaire plutôt que concurrent. |
+| **Chronas** | Atlas mondial vivant, refondu en 2025–2026 : 2 416 provinces fixes, auxquelles une table affecte chaque année, de -2000 à 2000, un souverain, une culture, une religion, une capitale et une population. API sous licence MIT, données CC BY-SA 4.0, édition par les inscrits. | Montre que le modèle « provinces + affectations » est simple à éditer. Sa limite : des provinces figées. Le modèle de fragments en est la généralisation. |
+| **ChronoAtlas** (2026) | Jeune projet : carte web (MapLibre 6) des frontières de -3400 à aujourd'hui, construite sur OHM, Cliopatria et CShapes ; code MIT, données propres en CC0, contributions sourcées. | Très proche de notre phase 1, et valide l'approche (index des changements, tuiles par époque). |
+| **Cliopatria** (Seshat) | 13 765 géométries pour 1 633 entités politiques, de -3400 à 2024 ; hiérarchie (membre de, vassalité, union personnelle) et QID Wikidata ; corrections réservées aux experts de Seshat. | Meilleure base de départ mondiale pour la phase 1 (voir § 7). |
+| **historical-basemaps** | 54 cartes du monde instantanées, sans identifiants stables d'une date à l'autre ; GPL-3.0. Base de nombreux globes amateurs. | Comparaison seulement : la GPL est incompatible avec les licences de données visées. |
+| **CShapes 2.0** | États souverains de 1886 à 2019, au jour près ; CC BY-NC-SA 4.0, non mis à jour depuis 2019. | Non libre (usage non commercial) : comparaison seulement. |
 | **War Atlas** | Carte d'environ 10 900 conflits ; code MIT, données de licences diverses. | Référence pour la couche événements. |
-| **GeaCron, Running Reality, Euratlas** | Atlas historiques commerciaux. | Références d'expérience utilisateur, pas de données réutilisables. |
+| **GeaCron, Running Reality, Euratlas** | Atlas historiques commerciaux ou à usage non commercial, sans export libre. | Références d'expérience utilisateur, pas de données réutilisables. |
 | **Wikidata** | Graphe de connaissances, CC0. | Source principale pour personnes, événements et entités ; identifiants (QID). |
 | **World Historical Gazetteer, Pleiades, PeriodO** | Gazetiers historiques, définitions de périodes. | Lieux anciens, noms d'époque, périodisations régionales. |
+
+Afficher Cliopatria ou historical-basemaps sur un globe a déjà été fait plusieurs fois, souvent par
+des projets amateurs. Parmi les projets apparus depuis 2024, aucun n'offre d'édition de type wiki ;
+seuls OHM et Chronas permettent d'éditer, chacun avec les limites de son modèle. La valeur durable
+de WikiMap tient donc moins au globe qu'aux données, à leur modèle et à l'édition.
 
 ### 3.2 Positionnement
 
@@ -146,9 +151,9 @@ sont affichés à la volée. Ce que WikiMap apporte en propre :
 | B. Plateforme indépendante | Tout refaire, base comprise | Contrôle total | Effort énorme, doublon de Wikidata et d'OHM, communauté à bâtir de zéro |
 | **C. Hybride (recommandé)** | Visionneuse + base propre limitée à ce que les autres ne font pas (territoires datés en fragments, données d'affichage, liens), fédérée avec Wikidata (QID) et OHM | Valeur propre claire, pas de doublon, échanges possibles | Exige de la rigueur sur les identifiants et les licences |
 
-**Avant d'écrire du code**, prendre contact avec ChronoAtlas et OpenHistoricalMap. Là où leurs
-objectifs recoupent les nôtres (frontières en 2D, imports de données, outils de pipeline), mieux
-vaut contribuer ou mutualiser que dupliquer. WikiMap se distingue par le globe, les couches de
+**Avant d'écrire du code**, prendre contact avec OpenHistoricalMap, Chronas et ChronoAtlas. Là où
+leurs objectifs recoupent les nôtres (frontières en 2D, imports de données, outils de pipeline),
+mieux vaut contribuer ou mutualiser que dupliquer. WikiMap se distingue par le globe, les couches de
 connaissances (événements, personnages, peuples), le modèle de fragments et l'éditeur
 collaboratif.
 
@@ -163,7 +168,7 @@ collaboratif.
 | Code de l'application et du pipeline | **AGPL-3.0** | Un service en ligne dérivé de WikiMap doit rester libre. |
 | Bibliothèques réutilisables (`packages/time`…) | **MIT** | Adoption la plus large possible. |
 | Données apportées par la communauté | **CC0** (recommandé) ou CC BY-SA 4.0 | Voir ci-dessous. |
-| Données importées | **Licence d'origine conservée par enregistrement** | Traçabilité ; publication par couche et par licence, comme le fait Overture Maps. |
+| Données importées | **Licence d'origine conservée par enregistrement** | Traçabilité ; publication par couche et par licence, comme Overture Maps, qui publie chaque thème sous sa propre licence. |
 | Textes et images de Wikipédia et Commons | Non stockés : affichés à la volée avec attribution | Licence CC BY-SA, et licence propre à chaque fichier sur Commons. |
 
 |  | CC0 (comme Wikidata et OHM) | CC BY-SA 4.0 (comme les textes de Wikipédia) |
@@ -175,7 +180,9 @@ collaboratif.
 
 **Recommandation** : CC0 pour les contributions, ce qui permet d'échanger dans les deux sens avec
 les deux projets les plus proches (Wikidata et OHM), et licence d'origine conservée pour chaque
-enregistrement importé. ChronoAtlas applique déjà ce modèle. Une donnée dérivée d'un enregistrement
+enregistrement importé. ChronoAtlas applique déjà ce modèle, et OHM prévoit une étiquette
+`license=*` pour les rares objets qui ne sont pas CC0. Les données sous GPL ou à usage non
+commercial restent exclues dans tous les cas. Une donnée dérivée d'un enregistrement
 CC BY reste CC BY : la licence suit la lignée de l'enregistrement. Conséquences concrètes :
 
 - les territoires issus de Cliopatria restent sous CC BY 4.0 (attribution). Pour les verser dans
@@ -190,29 +197,36 @@ et les données exigent une acceptation explicite de la licence au moment de con
 
 ### 4.2 Le temps
 
-**Saisie et stockage « humains » en EDTF** (*Extended Date/Time Format*, normalisé dans
-ISO 8601-2) :
+**Bornes saisies en EDTF** (*Extended Date/Time Format*, normalisé dans ISO 8601-2) :
 
 | Exemple EDTF | Sens |
 |--------------|------|
 | `1453-05-29` | 29 mai 1453 |
+| `1453-05` | mai 1453 (précision au mois) |
 | `1200~` | vers 1200 (approximatif) |
 | `1066?` | 1066, date incertaine |
+| `19XX` | une année non précisée entre 1900 et 1999 |
+| `[1180..1210]` | une année comprise entre 1180 et 1210 |
 | `-0752` | 753 av. J.-C. (numérotation astronomique : l'année `0000` est 1 av. J.-C.) |
-| `1914-07-28/1918-11-11` | intervalle |
-| `../1500` | début inconnu, fin en 1500 |
+
+**Intervalles de validité semi-ouverts** `[début, fin[` : `fin` est le premier instant où
+l'affirmation cesse d'être vraie. La fin d'un État et le début de son successeur portent donc la
+même date, sans chevauchement. Les deux bornes sont stockées séparément, chacune en EDTF, comme
+`start_date` et `end_date` dans OHM ou P580 et P582 dans Wikidata : la notation d'intervalle EDTF
+`a/b` est inclusive et prêterait à confusion. Une borne inconnue reste vide ; un événement ponctuel
+n'a qu'un début, et sa durée est celle de sa précision (un jour, un mois, une année). Les sources aux
+bornes incluses, comme Cliopatria, sont converties à l'import.
 
 **Bornes numériques calculées** pour l'indexation et le rendu : `debut_min`, `debut_max`,
 `fin_min`, `fin_max`, en **années décimales astronomiques** (float64, calendrier **grégorien
 proleptique**), plus une valeur nominale utilisée pour l'affichage. L'écart entre bornes mesure
 l'incertitude, que le rendu peut montrer. On reprend la convention d'OpenHistoricalMap
-(`start_decdate`, `end_decdate` : une année entière correspond au 1er janvier, `0.0` à l'an 1
-av. J.-C.). Les données et l'extension MapLibre d'OHM restent ainsi directement compatibles.
+(`start_decdate`, `end_decdate` : la valeur entière `n` désigne le 1er janvier de l'année `n`, et
+`0.0` le 1er janvier de l'an 1 av. J.-C.). Les données et l'extension MapLibre d'OHM restent ainsi
+directement compatibles.
 
 Règles :
 
-- **Intervalles semi-ouverts** `[début, fin[` : la fin d'un État peut coïncider avec le début de son
-  successeur sans chevauchement.
 - **Calendriers** : conversion à la saisie (julien, hégirien, républicain…), le calendrier d'origine
   étant conservé pour l'affichage. La révolution d'Octobre a eu lieu le 25 octobre 1917 julien,
   soit le 7 novembre grégorien ; Hastings, le 14 octobre 1066 julien, soit le 20 octobre grégorien.
@@ -282,8 +296,8 @@ Fragments (géométrie fixe)     Affectations datées (couche « souveraineté �
 | Approche | Avantages | Inconvénients |
 |----------|-----------|---------------|
 | Cartes instantanées (une carte du monde par date) | Très simple | Rien entre deux dates, pas d'identité des entités |
-| Polygones versionnés par entité (comme Cliopatria, CShapes, OHM) | Simple à afficher, format natif des sources | Frontières communes dupliquées, trous et chevauchements, édition lourde, pas de sémantique du changement |
-| Topologie d'arcs datés (style OSM ou TopoJSON) | Précis, sans duplication | Édition et validation complexes : chaque anneau doit rester fermé à chaque instant |
+| Polygones versionnés par entité (comme Cliopatria, CShapes) | Simple à afficher, format natif des sources | Frontières communes dupliquées, trous et chevauchements, édition lourde, pas de sémantique du changement |
+| Arcs partagés entre polygones datés (OSM, OHM, TopoJSON) | Précis, sans duplication | Édition et validation complexes : chaque anneau doit rester fermé à chaque instant |
 | **Fragments + affectations** (recommandé) | Partition sans trous ni chevauchements, édition locale au « pinceau temporel », changements animables, histoire d'un lieu immédiate, couches multiples | Import initial à soigner (superposition des sources, nettoyage des micro-fragments) ; finesse limitée par le découpage, mais affinable à volonté |
 
 **Ce que montre l'expérience d'OpenHistoricalMap**, qui suit le modèle des arcs partagés :
@@ -365,19 +379,22 @@ erDiagram
         id id
         enum type "entite_politique, peuple, personne, evenement, lieu..."
         string qid "identifiant Wikidata, facultatif"
-        edtf existence
+        edtf debut
+        edtf fin
         float importance
     }
     NOM {
         string langue
         string valeur
         enum genre "officiel, usuel, exonyme"
-        edtf validite
+        edtf debut
+        edtf fin
     }
     DECLARATION {
         string propriete "vocabulaire controle, aligne sur Wikidata"
         json valeur "entite, texte, quantite, date ou point"
-        edtf validite
+        edtf debut
+        edtf fin
         json qualificatifs
         enum rang "prefere, normal, deprecie"
     }
@@ -388,14 +405,16 @@ erDiagram
     AFFECTATION {
         enum couche "souverainete, culture, langue, religion, administration"
         enum role "effective, de_jure, occupation, vassalite, revendication"
-        edtf validite
+        edtf debut
+        edtf fin
         float certitude
         id evenement_cause "facultatif"
     }
     GEOMETRIE {
         enum role "position, trajet, emprise, ligne_de_front"
         geometry forme
-        edtf validite
+        edtf debut
+        edtf fin
     }
     SOURCE {
         enum type "ouvrage, article, carte, site, jeu_de_donnees"
@@ -411,13 +430,15 @@ erDiagram
 id: E000123
 type: entite_politique
 qid: Q12560                       # Empire ottoman
-existence: "1299~/1922-11-01"
+debut: "1299~"
+fin: "1922-11-01"
 noms:
-  - { langue: fr, valeur: "Empire ottoman", validite: "1299~/1922-11-01" }
+  - { langue: fr, valeur: "Empire ottoman", debut: "1299~", fin: "1922-11-01" }
 declarations:
   - propriete: capitale
     valeur: E004567               # Constantinople
-    validite: "1453-05-29/1922-11-01"
+    debut: "1453-05-29"
+    fin: "1922-11-01"
     sources: [S000042]
 ---
 # Une affectation : l'Alsace annexée par l'Empire allemand
@@ -425,15 +446,16 @@ fragment: F0098812
 couche: souverainete
 entite: E000777                   # Empire allemand
 role: effective
-validite: "1871-05-10/1918-11-11"
-evenement_cause: E000888          # Traité de Francfort
+debut: "1871-05-10"
+fin: "1918-11-11"                 # le traité de Versailles rend l'Alsace à la France à cette date
+evenement_cause: E000888          # traité de Francfort
 sources: [S000101]
 ---
-# Un événement
+# Un événement ponctuel : pas de fin, sa durée est celle de sa précision (un jour)
 id: E000999
 type: evenement
 qid: Q83224                       # bataille d'Hastings
-existence: "1066-10-20"           # EDTF, grégorien proleptique
+debut: "1066-10-20"               # EDTF, grégorien proleptique
 date_origine: { calendrier: julien, valeur: "1066-10-14" }   # pour l'affichage
 geometries:
   - { role: position, forme: { type: Point, coordinates: [0.4875, 50.9125] } }
@@ -479,6 +501,8 @@ geometries:
 - **MapLibre GL JS** en projection globe, qui passe d'elle-même en Mercator vers le zoom 12.
 - **Fond de carte intemporel** : relief ombré (altitudes Mapterhorn), teintes hypsométriques et de
   végétation, côtes, lacs, fleuves. Aucun élément moderne (routes, villes, frontières actuelles).
+  L'image *Natural Earth II*, qui montre un monde préindustriel idéalisé, est un bon point de
+  départ aux petites échelles.
 - **Style typographique d'atlas** : capitales espacées pour les empires, italiques pour les peuples,
   noms de villes d'époque. Thèmes clair et sombre.
 - **Couleurs des entités** stables dans le temps et distinctes de leurs voisines : coloration de
@@ -506,7 +530,8 @@ asynchrone (l'ancien rendu reste affiché pendant le calcul) : acceptable de tem
 1. **Index des changements.** Une frontière change à des dates précises et rien ne bouge entre
    deux changements. Pour chaque compartiment chargé, le pipeline fournit la liste triée des dates
    de changement. Quand la date bouge, on ne refiltre que si l'on franchit l'une d'elles.
-   ChronoAtlas, qui procède ainsi, annonce éviter plus de 99 % des recalculs.
+   ChronoAtlas, qui procède ainsi, annonce éviter plus de 99 % des recalculs. Cliopatria ne compte
+   que 508 dates de changement en 5 400 ans : les refiltrages restent rares.
 2. **Double tampon.** Le calque des territoires existe en deux exemplaires, chacun avec sa propre
    source pour que le recalcul de l'un ne touche pas l'autre. L'exemplaire caché reçoit le nouveau
    filtre ; quand il est prêt, on bascule par un fondu d'opacité de calque (`fill-layer-opacity`
@@ -675,6 +700,20 @@ flowchart TB
 9. **Publication** : envoi immuable et versionné avec un manifeste (versions des sources, dates des
    requêtes, commit du code). Le client lit le manifeste ; un build est reproductible.
 
+**Cliopatria en pratique** (phase 1) :
+
+- 13 765 géométries (166 Mo en GeoJSON, environ 3,6 millions de sommets) : simplification et
+  tuilage indispensables ;
+- années entières, bornes incluses (`FromYear`–`ToYear`), sans incertitude : à convertir en
+  intervalles semi-ouverts, en vérifiant la numérotation des années av. J.-C. ;
+- résolution d'environ 8 km et contours qui ne suivent pas toujours les côtes, d'où la découpe par
+  le masque terre/mer ;
+- entités de moins de 5 000 km² ou de moins de 50 ans absentes (cités-États, petites
+  principautés) : lacunes à combler avec OHM et la communauté ;
+- hiérarchie fournie (membre de, vassalité, union personnelle), qui alimente directement les
+  relations entre entités ;
+- QID Wikidata sur presque chaque ligne : la réconciliation est quasi immédiate.
+
 ---
 
 ## 8. Organisation du code
@@ -718,7 +757,8 @@ WikiMap/
 
 - Valider ce plan, trancher les licences, rédiger les premiers ADR : licences, modèle du temps,
   modèle des territoires, stratégie statique.
-- Prendre contact avec ChronoAtlas et OpenHistoricalMap (§ 3.2).
+- Prendre contact avec OpenHistoricalMap, Chronas et ChronoAtlas (§ 3.2), ainsi qu'avec les
+  auteurs de Cliopatria (licence des données dérivées, § 4.1).
 - Mettre en place le monorepo, la CI et le déploiement d'aperçus.
 - **Prototype A — rendu temporel** : Cliopatria entier sur le globe, frise basique. Comparer sur
   le même jeu de données l'index des changements avec double tampon, la coloration de fragments
@@ -739,8 +779,9 @@ WikiMap/
 
 1. Fond de carte physique en style atlas, sur globe.
 2. Frise v1 : zoom, déplacement, lecture, date dans l'URL.
-3. Entités politiques importées (Cliopatria et compléments), tuiles par période, fondus,
-   étiquettes, hiérarchie selon le zoom.
+3. Entités politiques de Cliopatria, tuiles par période, fondus, étiquettes, hiérarchie selon le
+   zoom. Cliopatria reste la seule source en phase 1, pour rester cohérent à l'échelle mondiale ;
+   les tracés plus fins d'OHM, fiables après 1500, arriveront avec les fragments en phase 3.
 4. Fiche v1 : nom à la date, période d'existence, résumé Wikipédia (français et anglais) quand le
    QID est connu.
 5. Déploiement continu, mesures de performance et captures de référence en CI.
@@ -770,12 +811,13 @@ décolonisation de l'Afrique…
    sources.
 3. Dépôt de données avec validation en CI (schéma, invariants, géométries) et aperçu sur le globe
    de chaque PR de données.
-4. Outils de contribution : une CLI (`wikimap affecter --fragments … --entite … --validite …`), un
+4. Outils de contribution : une CLI (`wikimap affecter --fragments … --entite … --debut … --fin …`), un
    projet QGIS type, des guides. Le greffon QGIS « Time Editor » (HIL, Marburg) vérifie déjà la
    cohérence spatiale et temporelle de ce type de données : à évaluer.
 5. Politique éditoriale v0 : vérifiabilité, neutralité, territoires contestés, conventions de
    nommage.
-6. Publications versionnées des données (exports GeoJSON/GeoParquet/CSV, DOI via Zenodo).
+6. Publications versionnées des données : exports GeoJSON, GeoParquet, CSV et Linked Places (le
+   format du World Historical Gazetteer), avec DOI via Zenodo.
 
 *Sortie* : un contributeur externe corrige une frontière par PR en moins d'une heure, guide en main ;
 la CI attrape les données invalides.
@@ -804,11 +846,15 @@ Hors périmètre immédiat, mais préparé dès maintenant (voir § 10).
 
 ### Phase 5 — Extensions (en continu)
 
-Trajets animés (campagnes militaires, explorations, migrations, routes commerciales) ;
-paléogéographie (côtes selon le niveau marin, glaciations) ; récits guidés ; cartes anciennes
-géoréférencées en surimpression (IIIF) ; couches langues, religions et démographie ; application
-mobile ; API pour la recherche ; assistance à la saisie par IA (proposer des déclarations sourcées à
-partir de textes, *toujours* validées par un humain).
+- **Trajets animés** : campagnes militaires, explorations, migrations, routes commerciales.
+- **Paléogéographie** : côtes calculées à partir d'un modèle d'altitude (ETOPO 2022, en CC0) et
+  d'une courbe du niveau marin, qui descend à -134 m au dernier maximum glaciaire. Pour l'époque
+  historique, deltas, polders ou mer d'Aral deviennent des plans d'eau datés.
+- **Récits guidés**, et cartes anciennes géoréférencées en surimpression (IIIF).
+- **Couches thématiques** : langues, religions, démographie.
+- **Application mobile** et **API pour la recherche**.
+- **Assistance à la saisie par IA** : proposer des déclarations sourcées à partir de textes,
+  *toujours* validées par un humain.
 
 ---
 
@@ -851,7 +897,7 @@ Notes de conception pour plus tard :
 
 | Risque | Parade |
 |--------|--------|
-| Données lacunaires et biaisées (eurocentrisme, « vides » trompeurs, peuples sans données) | Sources diversifiées, couche peuples dès la phase 2, incertitude affichée, « pas de données » distinct de « pas d'État », contributeurs de toutes les régions |
+| Données lacunaires et biaisées : eurocentrisme, « vides » trompeurs, peuples sans données, petites entités absentes des sources (Cliopatria ignore celles de moins de 5 000 km² ou de moins de 50 ans ; OHM est clairsemé avant 1500) | Sources diversifiées, couche peuples dès la phase 2, incertitude affichée, « pas de données » distinct de « pas d'État », contributeurs de toutes les régions |
 | Histoire contestée et guerres d'édition (Cachemire, Crimée, Kosovo, Taïwan…) | Politique de neutralité, statut « contesté » explicite, affichage de jure et de facto, protections et modération |
 | Contamination de licence | Licence et provenance par enregistrement, contrôle automatique dans le pipeline, aucun import sans licence claire |
 | Performance quand les données s'accumulent | Compartiments temporels, niveaux de détail, mesures en CI |
@@ -884,8 +930,8 @@ Notes de conception pour plus tard :
 3. **Profondeur temporelle du MVP** : de -3000 à aujourd'hui, avec la préhistoire plus tard ?
 4. **Langues au lancement** : français et anglais ?
 5. **Framework d'interface** : Svelte ou React ?
-6. **Relation avec OpenHistoricalMap** : simple source, partenaire, ou contribution directe de nos
-   géométries ?
+6. **Relations avec les projets voisins** (OpenHistoricalMap, Chronas, ChronoAtlas) : simples
+   sources, partenaires, ou contribution directe de nos données ?
 7. **Nom du projet** : « WikiMap » est proche de Wikimapia, un site existant.
 8. **Hébergement et budget** : qui paie le CDN et le stockage, et à quelle échelle ?
 
@@ -894,7 +940,8 @@ Notes de conception pour plus tard :
 ## 14. Prochaines étapes
 
 - [ ] Relire ce plan et répondre aux questions ouvertes (dans la pull request).
-- [ ] Contacter ChronoAtlas et OpenHistoricalMap pour identifier ce qui peut être mutualisé.
+- [ ] Contacter OpenHistoricalMap, Chronas, ChronoAtlas et les auteurs de Cliopatria pour
+  identifier ce qui peut être mutualisé.
 - [ ] ADR-001 Licences, ADR-002 Modèle du temps, ADR-003 Territoires, ADR-004 Diffusion statique.
 - [ ] Monorepo, CI et aperçus de déploiement.
 - [ ] Prototype A : rendu temporel, avec mesures.
@@ -906,8 +953,8 @@ Notes de conception pour plus tard :
 
 ## Annexe A — Sources de données candidates
 
-État relevé en octobre 2026. Les licences marquées « à confirmer » doivent être vérifiées avant tout
-import.
+État relevé en octobre 2026. La licence de chaque source doit être revérifiée au moment de l'import
+(elles changent, et certains jeux en combinent plusieurs).
 
 | Source | Contenu | Licence | Usage prévu |
 |--------|---------|---------|-------------|
@@ -915,11 +962,12 @@ import.
 | Wikipédia | Résumés d'articles | CC BY-SA 4.0 | Affichage à la volée |
 | Wikimedia Commons | Images | Licence propre à chaque fichier | Affichage à la volée |
 | Natural Earth | Côtes, fleuves, lacs, relief | Domaine public | Fond de carte |
-| Mapterhorn | Altitudes (tuiles *terrarium*) | Sources multiples, surtout CC BY 4.0 ; liste d'attributions à afficher | Relief |
+| Mapterhorn | Altitudes (tuiles *terrarium*) | Sources multiples (Copernicus, surtout CC BY 4.0, domaine public…) ; liste d'attributions à afficher | Relief |
 | Cliopatria | Frontières de -3400 à 2024 ; QID Wikidata et identifiant Seshat sur chaque ligne | CC BY 4.0 | Territoires, phase 1 |
 | Seshat | Variables par entité politique : capitales, langues, religions, successions, complexité sociale | CC BY-SA 4.0 (compte gratuit requis) | Compléments, licence isolée |
-| OpenHistoricalMap | Géométries datées | CC0 | Compléments, échanges |
-| CShapes 2.0 | États souverains 1886–2019 | Usage non commercial | Exclu de la base (non libre) ; comparaison |
+| OpenHistoricalMap | Géométries datées | CC0, sauf côtes et eaux importées d'OSM (CC BY-SA 2.0) | Compléments (fiables après 1500), échanges |
+| Chronas | Provinces et affectations annuelles, de -2000 à 2000 | CC BY-SA 4.0 | Comparaison, compléments sous licence isolée |
+| CShapes 2.0 | États souverains 1886–2019 | CC BY-NC-SA 4.0 (non commercial) | Exclu de la base (non libre) ; comparaison |
 | historical-basemaps | Cartes du monde à une cinquantaine de dates | GPL-3.0 | Comparaison seulement |
 | HCED | 8 874 batailles de -1468 à 2003 : coordonnées, belligérants, vainqueur | CC0 | Événements |
 | UCDP | Conflits 1946–2025 ; événements géolocalisés 1989–2025 | CC BY 4.0 | Événements contemporains |
@@ -927,8 +975,10 @@ import.
 | Pantheon | 126 582 personnalités, indice de popularité historique | CC BY-SA 4.0 | Étalonnage du score d'importance |
 | Laouenan et al. (2022) | 2,29 millions de personnalités vérifiées | CC BY-SA 4.0 | Étalonnage du score d'importance |
 | PeriodO | Définitions de périodes | CC0 | Bandes de la frise |
-| Pleiades | Lieux antiques | CC BY (à confirmer) | Villes et sites antiques |
-| World Historical Gazetteer | Lieux historiques | À confirmer | Noms d'époque |
+| Pleiades | 41 480 lieux antiques, attestations datées | CC BY 3.0 | Villes et sites antiques |
+| DARE | Gazetier et fond de carte de l'Empire romain | CC BY-SA 3.0 | Lieux romains, licence isolée |
+| World Historical Gazetteer | 2,24 millions de lieux historiques | Variable selon le jeu de données | Noms d'époque, au cas par cas |
+| ETOPO 2022 | Altitudes et bathymétrie mondiales | CC0 | Paléogéographie (phase 5) |
 | Contours Wikidata (P3896) | Pages GeoJSON sur Commons | Licence propre à chaque page | Inutilisable pour des frontières datées : instantanés sans date, 18 des 5 015 « pays historiques » seulement |
 
 ## Annexe B — Glossaire
